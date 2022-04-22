@@ -139,7 +139,7 @@ def read_info(outputdir, get_cover):
     if len(parts) > 1:
         raw, ans["xmp_metadata"] = parts
     try:
-        raw = raw.decode("utf-8")
+        raw = raw.decode("utf-8", errors="surrogateescape")
     except UnicodeDecodeError:
         print("pdfinfo returned no UTF-8 data")
         return None
@@ -215,8 +215,18 @@ def process_metadata_info_dict(info_dict, md):
 
     for field in info_dict.keys():
 
-        field_key = regex_dict_str_rekey(regex_rekey_dict, field.strip().lower())
-        field_value = info_dict[field]
+        original_field = deepcopy(field)
+        if isinstance(field, bytes):
+            field = field.decode("utf-8", errors="surrogateescape")
+
+        field_key = regex_dict_str_rekey(regex_rekey_dict, str(field).strip().lower())
+        try:
+            field_value = info_dict[original_field]
+        except KeyError:
+            try:
+                field_value = info_dict[field]
+            except:
+                continue  # Boring conversation anyway
 
         # Check to see if the key is one of the known ignore keys - if it is then continue
         if field_key is None or field_value is None:
@@ -232,7 +242,11 @@ def process_metadata_info_dict(info_dict, md):
         if not status:
 
             new_field_key = deepcopy(field_value)
+            if isinstance(new_field_key, bytes):
+                new_field_key = new_field_key.decode("utf-8", errors="surrogateescape")
             new_field_value = deepcopy(field_value)
+            if isinstance(new_field_value, bytes):
+                new_field_value = new_field_value.decode("utf-8", errors="surrogateescape")
 
             new_field_key = decode_text(new_field_key.name) if isinstance(new_field_key, PSLiteral) else new_field_key
             new_field_value = decode_text(new_field_value.name) if isinstance(new_field_value, PSLiteral) else new_field_value
@@ -303,7 +317,7 @@ def process_key_value_pair(key, value, info_dict_keys, md):
     :return: md
     """
     if isinstance(value, bytes):
-        value = value.decode("utf-8")
+        value = value.decode("utf-8", errors="surrogateescape")
 
     if key == "author":
         if "author" in md.keys():
@@ -397,7 +411,7 @@ def process_key_value_pair(key, value, info_dict_keys, md):
         # Ignore internal postscript tags - they are not helpful
         if isinstance(value, PSKeyword):
             value = six_unicode(value)
-            if value.lower() == "pdf":
+            if value.lower() == "pdf" or "pdf" in value.lower():
                 pass
             else:
                 err_str = f"unexpected value found when parsing universal tag - value - {value}"
@@ -665,11 +679,14 @@ def xmp_to_dict(xmp):
 
 if __name__ == "__main__":
 
-    test_path = "/home/eric/pdf_test_file_1.pdf"
+    test_path = "/home/eric/pdf_test_file_4.pdf"
 
     assert os.path.exists(test_path) and os.path.isfile(test_path)
 
-    get_metadata_inplace(test_path)
+    md_dict = get_metadata_inplace(test_path)
+
+    print("-------------------- METADATA DICT --------------------")
+    print(md_dict)
 
 
 
